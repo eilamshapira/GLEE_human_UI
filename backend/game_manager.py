@@ -92,8 +92,32 @@ class GameManager:
         while proc.poll() is None:
             await asyncio.sleep(1)
 
-        stdout = proc.stdout.read() if proc.stdout else ""
-        stderr = proc.stderr.read() if proc.stderr else ""
+        # Close log file handles
+        if hasattr(proc, '_stdout_log'):
+            proc._stdout_log.close()
+        if hasattr(proc, '_stderr_log'):
+            proc._stderr_log.close()
+
+        # Read from log files
+        from config import GLEE_DIR, HUMAN_GAME_EXPERIMENT_PREFIX
+        log_dir = GLEE_DIR / "Data" / f"{HUMAN_GAME_EXPERIMENT_PREFIX}_{session.session_id}"
+        stdout = ""
+        stderr = ""
+        try:
+            stdout_path = log_dir / "stdout.log"
+            stderr_path = log_dir / "stderr.log"
+            if stdout_path.exists():
+                stdout = stdout_path.read_text()
+            if stderr_path.exists():
+                stderr = stderr_path.read_text()
+        except Exception:
+            pass
+
+        print(f"[GameManager] Game {session.session_id} exited with code {proc.returncode}")
+        if stdout.strip():
+            print(f"[GameManager] stdout: {stdout[:500]}")
+        if stderr.strip():
+            print(f"[GameManager] stderr: {stderr[:500]}")
 
         if proc.returncode == 0:
             session.status = "finished"

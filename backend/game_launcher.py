@@ -14,7 +14,7 @@ import sys
 from pathlib import Path
 from typing import Any, Optional
 
-from config import GLEE_DIR, DEFAULT_GAME_TIMEOUT, DEFAULT_GLEE_HTTP_TIMEOUT, HUMAN_GAME_EXPERIMENT_PREFIX
+from config import GLEE_DIR, GLEE_PYTHON, DEFAULT_GAME_TIMEOUT, DEFAULT_GLEE_HTTP_TIMEOUT, HUMAN_GAME_EXPERIMENT_PREFIX
 
 
 def build_glee_config(
@@ -71,20 +71,28 @@ def launch_glee_subprocess(config: dict) -> subprocess.Popen:
     Launch GLEE as a subprocess. Returns the Popen object.
 
     The caller is responsible for monitoring/waiting on the process.
+    We log stdout/stderr to files to avoid pipe buffer deadlocks.
     """
     config_path = GLEE_DIR / f"tmp_human_ui_{config['experiment_name']}.json"
     config_path.write_text(json.dumps(config, indent=2))
 
+    log_dir = GLEE_DIR / "Data" / config["experiment_name"]
+    log_dir.mkdir(parents=True, exist_ok=True)
+    stdout_log = open(log_dir / "stdout.log", "w")
+    stderr_log = open(log_dir / "stderr.log", "w")
+
     proc = subprocess.Popen(
         [
-            sys.executable,
+            GLEE_PYTHON, "-u",
             "main.py",
             "-c", str(config_path.absolute()),
             "-n", "1",
         ],
         cwd=str(GLEE_DIR),
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        text=True,
+        stdout=stdout_log,
+        stderr=stderr_log,
     )
+    # Attach file handles so they can be closed later
+    proc._stdout_log = stdout_log  # type: ignore
+    proc._stderr_log = stderr_log  # type: ignore
     return proc

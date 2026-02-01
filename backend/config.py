@@ -10,6 +10,11 @@ PROJECT_DIR = BACKEND_DIR.parent
 TTRM_DIR = PROJECT_DIR.parent
 GLEE_DIR = TTRM_DIR / "GLEE"
 
+# Python executable for running GLEE subprocess
+# GLEE needs pandas, etc. which live in the TTRM venv, not the backend venv.
+_ttrm_venv_python = TTRM_DIR / ".venv" / "bin" / "python3"
+GLEE_PYTHON = str(_ttrm_venv_python) if _ttrm_venv_python.exists() else "python3"
+
 # Server
 BACKEND_HOST = os.getenv("BACKEND_HOST", "0.0.0.0")
 BACKEND_PORT = int(os.getenv("BACKEND_PORT", "8080"))

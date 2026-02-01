@@ -105,32 +105,46 @@ async def glee_chat(session_id: str, req: GLEEChatRequest):
     if session is None:
         raise HTTPException(404, "Unknown session")
 
-    # Determine turn type from GLEE's request
-    turn_type = "decision" if req.decision else "proposal"
+    # Determine turn type: GLEE doesn't always set decision=True,
+    # so we also detect from prompt content
+    is_decision = req.decision
+    if not is_decision and req.messages:
+        for msg in reversed(req.messages):
+            if msg.role in ("user", "system"):
+                content_lower = msg.content.lower()
+                if ("accept" in content_lower and "reject" in content_lower) or \
+                   "do you accept" in content_lower or \
+                   '{"decision"' in content_lower:
+                    is_decision = True
+                break
+
+    turn_type = "decision" if is_decision else "proposal"
 
     # Parse round number from game_params if available
     round_number = req.game_params.get("round_number", 1)
 
     # Extract last offer if this is a decision turn
     last_offer = None
-    if req.decision and req.messages:
-        # The last assistant message typically contains the offer we need to decide on
+    if is_decision and req.messages:
+        import re as _re
         for msg in reversed(req.messages):
-            if msg.role == "user" and "{" in msg.content:
-                import re
-                match = re.search(r"\{.*?\}", msg.content, re.DOTALL)
+            if "{" in msg.content:
+                match = _re.search(r"\{.*?\}", msg.content, _re.DOTALL)
                 if match:
                     try:
-                        last_offer = json.loads(match.group())
+                        cleaned = _re.sub(r"(?<=\d),(?=\d{3})", "", match.group())
+                        data = json.loads(cleaned)
+                        if "alice_gain" in data or "bob_gain" in data:
+                            last_offer = data
+                            break
                     except json.JSONDecodeError:
                         pass
-                break
 
     # Register the pending turn
     bridge.register_turn(
         session_id=session_id,
         messages=[{"role": m.role, "content": m.content} for m in req.messages],
-        decision=req.decision,
+        decision=is_decision,
         game_params=req.game_params,
     )
 
