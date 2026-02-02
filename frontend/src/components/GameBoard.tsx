@@ -136,29 +136,20 @@ export default function GameBoard({
 
       {/* Connection indicator */}
       {!connected && (
-        <div className="bg-amber-900/50 text-amber-300 text-xs text-center py-1">
+        <div className="bg-amber-50 text-amber-700 text-xs text-center py-1 border-b border-amber-200">
           Reconnecting...
         </div>
       )}
 
       {/* Two-column layout */}
       <div className="flex-1 flex overflow-hidden">
-        {/* Left: Chat History */}
-        <div className="w-1/2 border-r border-gray-800 flex flex-col">
-          <ChatHistory
-            messages={state.messages}
-            turnType={state.turnType}
-            playerRole={state.playerRole}
-          />
-        </div>
-
-        {/* Right: Controls */}
-        <div className="w-1/2 flex flex-col p-5 space-y-5 overflow-y-auto">
+        {/* Left: Controls */}
+        <div className="w-1/2 flex flex-col p-6 space-y-5 overflow-y-auto bg-gray-50 border-r border-gray-200">
           {state.turnType === "waiting" && (
             <div className="flex-1 flex items-center justify-center">
               <div className="text-center">
-                <div className="animate-pulse text-4xl mb-3">...</div>
-                <p className="text-gray-500">Waiting for AI to respond</p>
+                <div className="animate-pulse text-4xl mb-3 text-gray-300">...</div>
+                <p className="text-gray-400">Waiting for AI to respond</p>
               </div>
             </div>
           )}
@@ -204,6 +195,15 @@ export default function GameBoard({
               onDecide={handleDecision}
             />
           )}
+        </div>
+
+        {/* Right: Chat History */}
+        <div className="w-1/2 flex flex-col bg-white">
+          <ChatHistory
+            messages={state.messages}
+            turnType={state.turnType}
+            playerRole={state.playerRole}
+          />
         </div>
       </div>
     </div>

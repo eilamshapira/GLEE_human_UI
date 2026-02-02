@@ -98,15 +98,15 @@ export default function ChatHistory({ messages, turnType, playerRole }: Props) {
 
   const statusColor =
     turnType === "proposal" || turnType === "decision"
-      ? "bg-indigo-600"
+      ? "bg-blue-100 text-blue-700"
       : turnType === "waiting"
-        ? "bg-amber-600"
-        : "bg-gray-600";
+        ? "bg-amber-100 text-amber-700"
+        : "bg-gray-100 text-gray-600";
 
   return (
     <div className="flex flex-col h-full">
       {/* Status badge */}
-      <div className="px-4 py-2 border-b border-gray-800">
+      <div className="px-4 py-2.5 border-b border-gray-200">
         <span
           className={`inline-block px-3 py-1 rounded-full text-xs font-medium ${statusColor}`}
         >
@@ -117,7 +117,7 @@ export default function ChatHistory({ messages, turnType, playerRole }: Props) {
       {/* Messages */}
       <div className="flex-1 overflow-y-auto p-4 space-y-3">
         {displayMessages.length === 0 && (
-          <p className="text-gray-500 text-sm text-center mt-8">
+          <p className="text-gray-400 text-sm text-center mt-8">
             Waiting for the game to start...
           </p>
         )}
@@ -136,7 +136,7 @@ export default function ChatHistory({ messages, turnType, playerRole }: Props) {
                 <div key={i} className="space-y-3">
                   <DecisionCard decision="reject" isOwn={false} />
                   {parsed.roundInfo && (
-                    <div className="text-xs text-gray-500 italic px-2">
+                    <div className="text-xs text-gray-400 italic px-2">
                       {parsed.roundInfo}
                     </div>
                   )}
@@ -178,14 +178,14 @@ export default function ChatHistory({ messages, turnType, playerRole }: Props) {
             const short =
               content_summary(msg.content);
             return (
-              <div key={i} className="text-xs text-gray-500 italic px-2">
+              <div key={i} className="text-xs text-gray-400 italic px-2">
                 {short}
               </div>
             );
           }
 
           return (
-            <div key={i} className="text-sm text-gray-300 px-2">
+            <div key={i} className="text-sm text-gray-600 px-2">
               {msg.content.slice(0, 200)}
             </div>
           );
@@ -252,8 +252,8 @@ function ProposalCard({
   const alicePct = total > 0 ? ((aliceGain / total) * 100).toFixed(0) : "0";
   const bobPct = total > 0 ? ((bobGain / total) * 100).toFixed(0) : "0";
 
-  const border = isOwn ? "border-indigo-700" : "border-emerald-700";
-  const bg = isOwn ? "bg-indigo-950/30" : "bg-emerald-950/30";
+  const border = isOwn ? "border-indigo-200" : "border-emerald-200";
+  const bg = isOwn ? "bg-indigo-50" : "bg-emerald-50";
   const label = isOwn
     ? playerRole === "alice"
       ? "Alice (You)"
@@ -263,22 +263,22 @@ function ProposalCard({
       : "Alice (AI)";
 
   return (
-    <div className={`rounded-lg border ${border} ${bg} p-3`}>
+    <div className={`rounded-xl border ${border} ${bg} p-3`}>
       <div className="flex items-center justify-between mb-1">
-        <span className="text-xs font-medium text-gray-400">{label}</span>
-        <span className="text-xs text-gray-500">Proposal</span>
+        <span className="text-xs font-medium text-gray-500">{label}</span>
+        <span className="text-xs text-gray-400">Proposal</span>
       </div>
       <div className="flex items-center gap-3 mb-1">
-        <span className="text-sm">
+        <span className="text-sm text-gray-700">
           Alice: {aliceGain.toLocaleString()} ({alicePct}%)
         </span>
-        <span className="text-gray-600">|</span>
-        <span className="text-sm">
+        <span className="text-gray-300">|</span>
+        <span className="text-sm text-gray-700">
           Bob: {bobGain.toLocaleString()} ({bobPct}%)
         </span>
       </div>
       {message && (
-        <p className="text-sm text-gray-300 mt-1 italic">"{message}"</p>
+        <p className="text-sm text-gray-500 mt-1 italic">"{message}"</p>
       )}
     </div>
   );
@@ -292,12 +292,12 @@ function DecisionCard({
   isOwn: boolean;
 }) {
   const accepted = decision.toLowerCase() === "accept";
-  const color = accepted ? "text-green-400" : "text-red-400";
+  const color = accepted ? "text-emerald-600" : "text-red-500";
   const label = isOwn ? "You" : "AI";
 
   return (
-    <div className="rounded-lg border border-gray-700 bg-gray-900/50 p-3">
-      <span className="text-xs text-gray-400">{label}: </span>
+    <div className="rounded-xl border border-gray-200 bg-gray-50 p-3">
+      <span className="text-xs text-gray-500">{label}: </span>
       <span className={`font-semibold ${color}`}>
         {accepted ? "Accepted" : "Rejected"}
       </span>

@@ -32,7 +32,7 @@ class GLEEBridge:
     def __init__(self):
         # session_id -> PendingTurn (only one pending turn per session at a time)
         self._pending: dict[str, PendingTurn] = {}
-        # session_id -> number of /chat requests (proposal+decision pair = 1 round)
+        # session_id -> number of /chat requests (1 request per round per player)
         self._chat_count: dict[str, int] = {}
 
     def register_turn(
@@ -48,8 +48,7 @@ class GLEEBridge:
         Called when GLEE POSTs to /session/{session_id}/chat.
         Returns a PendingTurn whose .event can be awaited.
         """
-        # Track chat requests to derive round number
-        # Each round consists of a proposal + decision pair, so round = (count // 2) + 1
+        # Track chat requests to derive round number (1 request per round per player)
         self._chat_count[session_id] = self._chat_count.get(session_id, 0) + 1
 
         turn = PendingTurn(
@@ -80,10 +79,10 @@ class GLEEBridge:
     def get_round_number(self, session_id: str) -> int:
         """Derive the current round number from the chat request count.
 
-        Each round consists of a proposal + decision pair (2 chat requests).
+        GLEE sends exactly 1 /chat request per player per round, so
+        chat_count == round_number for each player.
         """
-        count = self._chat_count.get(session_id, 0)
-        return (count + 1) // 2  # Round up: requests 1-2 → round 1, 3-4 → round 2, etc.
+        return self._chat_count.get(session_id, 0)
 
     def clear(self, session_id: str):
         """Remove pending turn for a session."""

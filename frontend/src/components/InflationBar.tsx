@@ -19,12 +19,12 @@ export default function InflationBar({
   const multiplier2 = Math.pow(delta2, Math.max(0, roundNumber - 1));
 
   return (
-    <div className="flex items-center justify-between px-6 py-3 bg-gray-900 border-b border-gray-800">
+    <div className="flex items-center justify-between px-6 py-3 bg-white border-b border-gray-200">
       <div className="flex items-center gap-4">
-        <span className="text-sm text-gray-400">Round {roundNumber}</span>
+        <span className="text-sm font-semibold text-gray-700">Round {roundNumber}</span>
       </div>
 
-      <div className="flex items-center gap-4">
+      <div className="flex items-center gap-3">
         <Badge
           label="Alice"
           inflation={inflation1}
@@ -57,10 +57,10 @@ function Badge({
   isYou: boolean;
   color: string;
 }) {
-  const bg = color === "indigo" ? "bg-indigo-900/50" : "bg-emerald-900/50";
-  const text = color === "indigo" ? "text-indigo-300" : "text-emerald-300";
+  const bg = color === "indigo" ? "bg-indigo-50" : "bg-emerald-50";
+  const text = color === "indigo" ? "text-indigo-700" : "text-emerald-700";
   const border =
-    color === "indigo" ? "border-indigo-700" : "border-emerald-700";
+    color === "indigo" ? "border-indigo-200" : "border-emerald-200";
 
   return (
     <div
@@ -70,10 +70,10 @@ function Badge({
         {label}
         {isYou && " (You)"}
       </span>
-      <span className="text-xs text-gray-400">
+      <span className="text-xs text-gray-500">
         {inflation}% inflation
       </span>
-      <span className="text-xs text-gray-500">
+      <span className="text-xs text-gray-400">
         ({(multiplier * 100).toFixed(0)}% value)
       </span>
     </div>

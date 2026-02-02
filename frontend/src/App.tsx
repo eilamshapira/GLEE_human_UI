@@ -34,7 +34,7 @@ export default function App() {
   // No session yet — show setup
   if (!sessionId) {
     return (
-      <div className="min-h-screen bg-gray-950 flex items-center justify-center p-4">
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
         <GameSetup onStart={handleStart} isCreating={isCreating} />
       </div>
     );
@@ -43,7 +43,7 @@ export default function App() {
   // Game finished
   if (gameState.state.finished) {
     return (
-      <div className="min-h-screen bg-gray-950 flex items-center justify-center p-4">
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
         <GameResult
           outcome={gameState.state.outcome}
           finalAlice={gameState.state.finalAlice}
@@ -58,7 +58,7 @@ export default function App() {
 
   // Active game
   return (
-    <div className="min-h-screen bg-gray-950">
+    <div className="min-h-screen bg-gray-50">
       <GameBoard
         state={gameState.state}
         connected={connected}

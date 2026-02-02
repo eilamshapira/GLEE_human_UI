@@ -16,14 +16,14 @@ export default function ToneChips({ active, onToggle }: Props) {
   return (
     <div className="flex flex-wrap gap-2">
       {TONE_PAIRS.map(([more, less, label]) => (
-        <div key={label} className="flex items-center gap-1">
+        <div key={label} className="flex flex-col items-center gap-1">
           <Chip
-            label={`+${label.slice(0, 4).toLowerCase()}`}
+            label={`More ${label.toLowerCase()}`}
             active={active.includes(more)}
             onClick={() => onToggle(more)}
           />
           <Chip
-            label={`-${label.slice(0, 4).toLowerCase()}`}
+            label={`Less ${label.toLowerCase()}`}
             active={active.includes(less)}
             onClick={() => onToggle(less)}
           />
@@ -45,10 +45,10 @@ function Chip({
   return (
     <button
       onClick={onClick}
-      className={`px-2 py-0.5 rounded text-xs font-mono transition ${
+      className={`px-3 py-1.5 rounded-full text-xs font-medium transition ${
         active
-          ? "bg-indigo-600 text-white"
-          : "bg-gray-800 text-gray-500 hover:bg-gray-700 hover:text-gray-300"
+          ? "bg-slate-800 text-white"
+          : "bg-gray-100 text-gray-500 hover:bg-gray-200 hover:text-gray-700 border border-gray-200"
       }`}
     >
       {label}
