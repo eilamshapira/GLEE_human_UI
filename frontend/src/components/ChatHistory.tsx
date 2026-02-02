@@ -16,8 +16,6 @@ interface ParsedAction {
   decision?: string;
   /** If true, the opponent rejected the previous offer before making this proposal */
   rejectedFirst?: boolean;
-  /** Round info extracted from GLEE message */
-  roundInfo?: string;
   raw: string;
 }
 
@@ -57,15 +55,12 @@ function parseMessage(msg: ChatMessage): ParsedAction {
     const msgMatch = content.match(/#\s*\w+'s message:\s*(.+)/);
     // Check if this message also contains a rejection of the previous offer
     const hasRejection = /rejected\s+(your|.*'s)\s+offer/i.test(content);
-    // Extract round info
-    const roundMatch = content.match(/[Rr]ound\s+(\d+)/);
     return {
       type: "proposal",
       aliceGain: parseInt(aliceMatch[1].replace(/,/g, ""), 10),
       bobGain: parseInt(bobMatch[1].replace(/,/g, ""), 10),
       message: msgMatch ? msgMatch[1].trim() : undefined,
       rejectedFirst: hasRejection,
-      roundInfo: roundMatch ? `Round ${roundMatch[1]}` : undefined,
       raw: content,
     };
   }
@@ -105,15 +100,6 @@ export default function ChatHistory({ messages, turnType, playerRole }: Props) {
 
   return (
     <div className="flex flex-col h-full">
-      {/* Status badge */}
-      <div className="px-4 py-2.5 border-b border-gray-200">
-        <span
-          className={`inline-block px-3 py-1 rounded-full text-xs font-medium ${statusColor}`}
-        >
-          {statusText}
-        </span>
-      </div>
-
       {/* Messages */}
       <div className="flex-1 overflow-y-auto p-4 space-y-3">
         {displayMessages.length === 0 && (
@@ -122,105 +108,111 @@ export default function ChatHistory({ messages, turnType, playerRole }: Props) {
           </p>
         )}
 
-        {displayMessages.map((msg, i) => {
-          const parsed = parseMessage(msg);
-          const isAssistant = msg.role === "assistant";
-          // In GLEE: "assistant" messages are from the player whose turn it is
-          // "user" messages are instructions/prompts from the game engine
-          // We show assistant messages as player actions
+        {(() => {
+          // Track sequential round number by counting proposals.
+          // GLEE numbers rounds per-player, so we compute our own.
+          let roundCounter = 0;
+          return displayMessages.map((msg, i) => {
+            const parsed = parseMessage(msg);
+            const isAssistant = msg.role === "assistant";
 
-          if (parsed.type === "proposal") {
-            // If opponent rejected before counter-proposing, show both
-            if (parsed.rejectedFirst && !isAssistant) {
+            if (parsed.type === "proposal") {
+              // If opponent rejected before counter-proposing, show both
+              if (parsed.rejectedFirst && !isAssistant) {
+                roundCounter++;
+                return (
+                  <div key={i} className="space-y-3">
+                    <DecisionCard decision="reject" isOwn={false} playerRole={playerRole} />
+                    <div className="text-xs text-gray-400 italic px-2">
+                      Round {roundCounter}
+                    </div>
+                    <ProposalCard
+                      aliceGain={parsed.aliceGain ?? 0}
+                      bobGain={parsed.bobGain ?? 0}
+                      message={parsed.message}
+                      isOwn={false}
+                      playerRole={playerRole}
+                    />
+                  </div>
+                );
+              }
+              roundCounter++;
               return (
                 <div key={i} className="space-y-3">
-                  <DecisionCard decision="reject" isOwn={false} />
-                  {parsed.roundInfo && (
-                    <div className="text-xs text-gray-400 italic px-2">
-                      {parsed.roundInfo}
-                    </div>
-                  )}
+                  <div className="text-xs text-gray-400 italic px-2">
+                    Round {roundCounter}
+                  </div>
                   <ProposalCard
                     aliceGain={parsed.aliceGain ?? 0}
                     bobGain={parsed.bobGain ?? 0}
                     message={parsed.message}
-                    isOwn={false}
+                    isOwn={isAssistant}
                     playerRole={playerRole}
                   />
                 </div>
               );
             }
-            return (
-              <ProposalCard
-                key={i}
-                aliceGain={parsed.aliceGain ?? 0}
-                bobGain={parsed.bobGain ?? 0}
-                message={parsed.message}
-                isOwn={isAssistant}
-                playerRole={playerRole}
-              />
-            );
-          }
 
-          if (parsed.type === "decision") {
-            return (
-              <DecisionCard
-                key={i}
-                decision={parsed.decision ?? ""}
-                isOwn={isAssistant}
-              />
-            );
-          }
+            if (parsed.type === "decision") {
+              return (
+                <DecisionCard
+                  key={i}
+                  decision={parsed.decision ?? ""}
+                  isOwn={isAssistant}
+                  playerRole={playerRole}
+                />
+              );
+            }
 
-          // Game engine messages (user role = instructions from GLEE)
-          if (msg.role === "user") {
-            // Show abbreviated game messages
-            const short =
-              content_summary(msg.content);
+            // Game engine messages (user role = instructions from GLEE)
+            if (msg.role === "user") {
+              const short = content_summary(msg.content);
+              if (!short) return null;
+              return (
+                <div key={i} className="text-xs text-gray-400 italic px-2">
+                  {short}
+                </div>
+              );
+            }
+
             return (
-              <div key={i} className="text-xs text-gray-400 italic px-2">
-                {short}
+              <div key={i} className="text-sm text-gray-600 px-2">
+                {msg.content.slice(0, 200)}
               </div>
             );
-          }
-
-          return (
-            <div key={i} className="text-sm text-gray-600 px-2">
-              {msg.content.slice(0, 200)}
-            </div>
-          );
-        })}
+          });
+        })()}
         <div ref={endRef} />
+      </div>
+
+      {/* Status badge — pinned to bottom */}
+      <div className="px-4 py-2.5 border-t border-gray-200">
+        <span
+          className={`inline-block px-3 py-1 rounded-full text-xs font-medium ${statusColor}`}
+        >
+          {statusText}
+        </span>
       </div>
     </div>
   );
 }
 
 function content_summary(text: string): string {
-  // Extract key info from GLEE's verbose prompts
+  // Round labels are handled by the render loop (sequential counter),
+  // so this function never outputs round info.
 
   // If message contains an offer (GLEE text format), don't summarize — parseMessage handles it
-  if (/#\s*Alice\s+gain:/i.test(text) && /#\s*Bob\s+gain:/i.test(text)) {
-    // This will be rendered as a ProposalCard by parseMessage, so return empty
-    // (this path shouldn't be reached since parseMessage catches it first)
+  if (/#\s*Alice\s+gain:/i.test(text) && /#\s*Bob\s+gain:/i.test(text))
     return "";
-  }
 
   if (text.includes("accepted") && !text.includes("gain"))
     return "Offer was accepted.";
   if (text.includes("rejected") && !text.includes("gain"))
     return "Offer was rejected.";
-  if (text.includes("Send your offer")) return "Your turn to make an offer.";
-  if (text.includes("accept or reject") || text.includes("Do you accept"))
-    return "Decide: accept or reject?";
 
-  // Detect round-start messages (e.g., "Round 3", "round 3 of 12")
-  const roundMatch = text.match(/[Rr]ound\s+(\d+)(?:\s+of\s+(\d+))?/);
-  if (roundMatch) {
-    const roundNum = roundMatch[1];
-    const totalRounds = roundMatch[2];
-    return totalRounds ? `Round ${roundNum} of ${totalRounds}` : `Round ${roundNum}`;
-  }
+  if (text.includes("Send your offer")) return "";
+  if (text.includes("accept or reject") || text.includes("Do you accept"))
+    return "";
 
   // Collapse GLEE's long game-rules prompts
   if (
@@ -248,10 +240,6 @@ function ProposalCard({
   isOwn: boolean;
   playerRole: string;
 }) {
-  const total = aliceGain + bobGain;
-  const alicePct = total > 0 ? ((aliceGain / total) * 100).toFixed(0) : "0";
-  const bobPct = total > 0 ? ((bobGain / total) * 100).toFixed(0) : "0";
-
   const border = isOwn ? "border-indigo-200" : "border-emerald-200";
   const bg = isOwn ? "bg-indigo-50" : "bg-emerald-50";
   const label = isOwn
@@ -270,11 +258,11 @@ function ProposalCard({
       </div>
       <div className="flex items-center gap-3 mb-1">
         <span className="text-sm text-gray-700">
-          Alice: {aliceGain.toLocaleString()} ({alicePct}%)
+          Alice: {aliceGain.toLocaleString()}
         </span>
         <span className="text-gray-300">|</span>
         <span className="text-sm text-gray-700">
-          Bob: {bobGain.toLocaleString()} ({bobPct}%)
+          Bob: {bobGain.toLocaleString()}
         </span>
       </div>
       {message && (
@@ -287,13 +275,21 @@ function ProposalCard({
 function DecisionCard({
   decision,
   isOwn,
+  playerRole,
 }: {
   decision: string;
   isOwn: boolean;
+  playerRole: string;
 }) {
   const accepted = decision.toLowerCase() === "accept";
   const color = accepted ? "text-emerald-600" : "text-red-500";
-  const label = isOwn ? "You" : "AI";
+  const label = isOwn
+    ? playerRole === "alice"
+      ? "Alice (You)"
+      : "Bob (You)"
+    : playerRole === "alice"
+      ? "Bob (AI)"
+      : "Alice (AI)";
 
   return (
     <div className="rounded-xl border border-gray-200 bg-gray-50 p-3">
