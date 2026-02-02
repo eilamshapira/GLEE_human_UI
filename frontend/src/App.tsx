@@ -46,7 +46,8 @@ export default function App() {
       <div className="min-h-screen bg-gray-950 flex items-center justify-center p-4">
         <GameResult
           outcome={gameState.state.outcome}
-          messages={gameState.state.messages}
+          finalAlice={gameState.state.finalAlice}
+          finalBob={gameState.state.finalBob}
           gameParams={gameState.state.gameParams}
           playerRole={gameState.state.playerRole}
           onPlayAgain={handlePlayAgain}

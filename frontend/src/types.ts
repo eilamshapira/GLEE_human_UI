@@ -62,6 +62,8 @@ export interface GameFinishedMsg {
   type: "game_finished";
   session_id: string;
   outcome: string;
+  final_alice?: number;
+  final_bob?: number;
   stdout?: string;
   stderr?: string;
 }

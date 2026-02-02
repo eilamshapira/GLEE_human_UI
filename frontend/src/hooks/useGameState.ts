@@ -21,6 +21,8 @@ export interface GameState {
   lastOffer: Record<string, unknown> | null;
   finished: boolean;
   outcome: string;
+  finalAlice: number;
+  finalBob: number;
   // Form state
   sliderPct: number;
   messageText: string;
@@ -38,6 +40,8 @@ const initialState: GameState = {
   lastOffer: null,
   finished: false,
   outcome: "",
+  finalAlice: 0,
+  finalBob: 0,
   sliderPct: 60,
   messageText: "",
   toneModifiers: [],
@@ -67,6 +71,8 @@ export function useGameState(lastMessage: WSMessage | null) {
         ...prev,
         finished: true,
         outcome: msg.outcome,
+        finalAlice: msg.final_alice ?? 0,
+        finalBob: msg.final_bob ?? 0,
         turnType: "finished",
       }));
     }

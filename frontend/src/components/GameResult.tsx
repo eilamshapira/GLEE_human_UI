@@ -1,8 +1,9 @@
-import type { ChatMessage, GameParams } from "../types";
+import type { GameParams } from "../types";
 
 interface Props {
   outcome: string;
-  messages: ChatMessage[];
+  finalAlice: number;
+  finalBob: number;
   gameParams: GameParams;
   playerRole: string;
   onPlayAgain: () => void;
@@ -10,33 +11,13 @@ interface Props {
 
 export default function GameResult({
   outcome,
-  messages,
+  finalAlice,
+  finalBob,
   gameParams,
   playerRole,
   onPlayAgain,
 }: Props) {
-  // Try to extract final payoffs from messages
-  let finalAlice = 0;
-  let finalBob = 0;
-  let accepted = false;
-
-  for (const msg of [...messages].reverse()) {
-    const match = msg.content.match(/\{[\s\S]*?\}/);
-    if (match) {
-      try {
-        const data = JSON.parse(match[0].replace(/(?<=\d),(?=\d{3})/g, ""));
-        if ("decision" in data && data.decision === "accept") {
-          accepted = true;
-        }
-        if ("alice_gain" in data && !finalAlice) {
-          finalAlice = Number(data.alice_gain);
-          finalBob = Number(data.bob_gain);
-        }
-      } catch {
-        // ignore
-      }
-    }
-  }
+  const accepted = outcome === "deal";
 
   const money = gameParams.money_to_divide ?? 10000;
   const isWin =

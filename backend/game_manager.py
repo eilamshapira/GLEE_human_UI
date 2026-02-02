@@ -7,6 +7,8 @@ Tracks active games, launches GLEE subprocesses, monitors completion.
 from __future__ import annotations
 
 import asyncio
+import json
+import re
 import subprocess
 import uuid
 from dataclasses import dataclass, field
@@ -125,6 +127,9 @@ class GameManager:
             session.status = "error"
             session.result = {"error": stderr[:500]}
 
+        # Parse stdout to determine real outcome
+        outcome, final_alice, final_bob = self._parse_outcome(stdout, proc.returncode)
+
         # Clean up pending bridge turn
         bridge.clear(session.session_id)
 
@@ -132,10 +137,41 @@ class GameManager:
         await ws_manager.send_json(session.session_id, {
             "type": "game_finished",
             "session_id": session.session_id,
-            "outcome": "completed" if proc.returncode == 0 else "error",
+            "outcome": outcome,
+            "final_alice": final_alice,
+            "final_bob": final_bob,
             "stdout": stdout[:1000],
             "stderr": stderr[:500],
         })
+
+    @staticmethod
+    def _parse_outcome(stdout: str, returncode: int) -> tuple[str, int, int]:
+        """Parse GLEE stdout to determine deal/no_deal and extract gains."""
+        if returncode != 0:
+            return "error", 0, 0
+
+        # Check if someone accepted the offer
+        accepted = "accepted the offer" in stdout.lower()
+
+        if not accepted:
+            return "no_deal", 0, 0
+
+        # Extract gains from the last [RESPONSE] line containing alice_gain
+        final_alice = 0
+        final_bob = 0
+        for line in reversed(stdout.splitlines()):
+            if "alice_gain" in line:
+                json_match = re.search(r'\{[^{}]*\}', line)
+                if json_match:
+                    try:
+                        data = json.loads(json_match.group())
+                        final_alice = int(data.get("alice_gain", 0))
+                        final_bob = int(data.get("bob_gain", 0))
+                        break
+                    except (json.JSONDecodeError, ValueError):
+                        pass
+
+        return "deal", final_alice, final_bob
 
     def get(self, session_id: str) -> Optional[GameSession]:
         return self._sessions.get(session_id)
