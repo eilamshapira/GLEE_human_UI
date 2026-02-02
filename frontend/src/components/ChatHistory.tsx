@@ -14,6 +14,10 @@ interface ParsedAction {
   bobGain?: number;
   message?: string;
   decision?: string;
+  /** If true, the opponent rejected the previous offer before making this proposal */
+  rejectedFirst?: boolean;
+  /** Round info extracted from GLEE message */
+  roundInfo?: string;
   raw: string;
 }
 
@@ -51,11 +55,17 @@ function parseMessage(msg: ChatMessage): ParsedAction {
   const bobMatch = content.match(/#\s*Bob\s+gain:\s*([\d,]+)/i);
   if (aliceMatch && bobMatch) {
     const msgMatch = content.match(/#\s*\w+'s message:\s*(.+)/);
+    // Check if this message also contains a rejection of the previous offer
+    const hasRejection = /rejected\s+(your|.*'s)\s+offer/i.test(content);
+    // Extract round info
+    const roundMatch = content.match(/[Rr]ound\s+(\d+)/);
     return {
       type: "proposal",
       aliceGain: parseInt(aliceMatch[1].replace(/,/g, ""), 10),
       bobGain: parseInt(bobMatch[1].replace(/,/g, ""), 10),
       message: msgMatch ? msgMatch[1].trim() : undefined,
+      rejectedFirst: hasRejection,
+      roundInfo: roundMatch ? `Round ${roundMatch[1]}` : undefined,
       raw: content,
     };
   }
@@ -120,6 +130,26 @@ export default function ChatHistory({ messages, turnType, playerRole }: Props) {
           // We show assistant messages as player actions
 
           if (parsed.type === "proposal") {
+            // If opponent rejected before counter-proposing, show both
+            if (parsed.rejectedFirst && !isAssistant) {
+              return (
+                <div key={i} className="space-y-3">
+                  <DecisionCard decision="reject" isOwn={false} />
+                  {parsed.roundInfo && (
+                    <div className="text-xs text-gray-500 italic px-2">
+                      {parsed.roundInfo}
+                    </div>
+                  )}
+                  <ProposalCard
+                    aliceGain={parsed.aliceGain ?? 0}
+                    bobGain={parsed.bobGain ?? 0}
+                    message={parsed.message}
+                    isOwn={false}
+                    playerRole={playerRole}
+                  />
+                </div>
+              );
+            }
             return (
               <ProposalCard
                 key={i}
