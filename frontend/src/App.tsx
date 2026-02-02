@@ -9,15 +9,21 @@ import type { GameConfig } from "./types";
 
 export default function App() {
   const [sessionId, setSessionId] = useState<string | null>(null);
+  const [isCreating, setIsCreating] = useState(false);
 
   const { lastMessage, connected, send } = useWebSocket(sessionId);
   const gameState = useGameState(lastMessage);
 
   const handleStart = async (config: GameConfig) => {
-    const result = await createGame(config);
-    setSessionId(result.session_id);
-    gameState.setSessionId(result.session_id);
-    gameState.setConfig(config);
+    setIsCreating(true);
+    try {
+      const result = await createGame(config);
+      setSessionId(result.session_id);
+      gameState.setSessionId(result.session_id);
+      gameState.setConfig(config);
+    } finally {
+      setIsCreating(false);
+    }
   };
 
   const handlePlayAgain = () => {
@@ -29,7 +35,7 @@ export default function App() {
   if (!sessionId) {
     return (
       <div className="min-h-screen bg-gray-950 flex items-center justify-center p-4">
-        <GameSetup onStart={handleStart} />
+        <GameSetup onStart={handleStart} isCreating={isCreating} />
       </div>
     );
   }

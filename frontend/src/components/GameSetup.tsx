@@ -3,9 +3,10 @@ import type { GameConfig, GameFamily, PlayerRole } from "../types";
 
 interface Props {
   onStart: (config: GameConfig) => void;
+  isCreating?: boolean;
 }
 
-export default function GameSetup({ onStart }: Props) {
+export default function GameSetup({ onStart, isCreating = false }: Props) {
   const [family, setFamily] = useState<GameFamily>("bargaining");
   const [role, setRole] = useState<PlayerRole>("alice");
   const [aiUrl, setAiUrl] = useState("http://localhost:5001");
@@ -173,10 +174,10 @@ export default function GameSetup({ onStart }: Props) {
       {/* Start */}
       <button
         onClick={handleSubmit}
-        disabled={loading}
+        disabled={loading || isCreating}
         className="w-full py-3 rounded-lg bg-indigo-600 hover:bg-indigo-500 disabled:bg-gray-700 font-semibold text-lg transition"
       >
-        {loading ? "Starting..." : "Start Game"}
+        {loading || isCreating ? "Starting..." : "Start Game"}
       </button>
     </div>
   );

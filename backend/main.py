@@ -35,8 +35,8 @@ app = FastAPI(title="GLEE Human UI")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
+    allow_origins=["http://localhost:3000", "http://localhost:5173"],
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -120,33 +120,55 @@ async def glee_chat(session_id: str, req: GLEEChatRequest):
 
     turn_type = "decision" if is_decision else "proposal"
 
-    # Parse round number from game_params if available
-    round_number = req.game_params.get("round_number", 1)
-
     # Extract last offer if this is a decision turn
     last_offer = None
     if is_decision and req.messages:
         import re as _re
+        # Search the last user/system message for the offer being presented
         for msg in reversed(req.messages):
-            if "{" in msg.content:
-                match = _re.search(r"\{.*?\}", msg.content, _re.DOTALL)
-                if match:
+            if msg.role not in ("user", "system"):
+                continue
+            content = msg.content
+
+            # Method 1: Parse GLEE's text format "# Alice gain: 3500\n# Bob gain: 6500"
+            alice_match = _re.search(r"#\s*Alice\s+gain:\s*([\d,]+)", content, _re.IGNORECASE)
+            bob_match = _re.search(r"#\s*Bob\s+gain:\s*([\d,]+)", content, _re.IGNORECASE)
+            if alice_match and bob_match:
+                last_offer = {
+                    "alice_gain": int(alice_match.group(1).replace(",", "")),
+                    "bob_gain": int(bob_match.group(1).replace(",", "")),
+                }
+                # Also extract message if present
+                msg_match = _re.search(r"#\s*\w+'s message:\s*(.+)", content)
+                if msg_match:
+                    last_offer["message"] = msg_match.group(1).strip()
+                break
+
+            # Method 2: Parse JSON format {"alice_gain": ..., "bob_gain": ...}
+            if "{" in content:
+                matches = _re.findall(r"\{.*?\}", content, _re.DOTALL)
+                for match_str in reversed(matches):
                     try:
-                        cleaned = _re.sub(r"(?<=\d),(?=\d{3})", "", match.group())
+                        cleaned = _re.sub(r"(?<=\d),(?=\d{3})", "", match_str)
                         data = json.loads(cleaned)
                         if "alice_gain" in data or "bob_gain" in data:
                             last_offer = data
                             break
                     except json.JSONDecodeError:
                         pass
+                if last_offer:
+                    break
 
-    # Register the pending turn
+    # Register the pending turn (also increments chat count for round tracking)
     bridge.register_turn(
         session_id=session_id,
         messages=[{"role": m.role, "content": m.content} for m in req.messages],
         decision=is_decision,
         game_params=req.game_params,
     )
+
+    # Derive round number from chat request count (GLEE doesn't send round_number)
+    round_number = bridge.get_round_number(session_id)
 
     # Push game state to connected frontend
     await ws_manager.send_json(session_id, {
@@ -232,11 +254,26 @@ async def websocket_endpoint(ws: WebSocket, session_id: str):
                     response_json = _build_response_json_from_ws(
                         msg, session, pending
                     )
-                    bridge.submit_response(session_id, response_json)
+                    ok = bridge.submit_response(session_id, response_json)
+                    if ok:
+                        # Transition frontend to "waiting" state
+                        await ws.send_text(json.dumps({
+                            "type": "game_state",
+                            "session_id": session_id,
+                            "turn_type": "waiting",
+                            "round_number": bridge.get_round_number(session_id),
+                            "messages": pending.messages,
+                            "game_params": pending.game_params,
+                            "player_role": session.player_role,
+                            "last_offer": None,
+                        }))
 
     except WebSocketDisconnect:
         ws_manager.disconnect(session_id, ws)
-    except Exception:
+    except Exception as e:
+        print(f"[WS Error] {session_id}: {e}")
+        import traceback
+        traceback.print_exc()
         ws_manager.disconnect(session_id, ws)
 
 
@@ -256,8 +293,8 @@ def _build_response_json(
         data["alice_gain"] = req.alice_gain
     if req.bob_gain is not None:
         data["bob_gain"] = req.bob_gain
-    if req.message is not None and session.game_args.get("messages_allowed"):
-        data["message"] = req.message
+    if session.game_args.get("messages_allowed"):
+        data["message"] = req.message or ""
 
     return json.dumps(data)
 
@@ -276,8 +313,8 @@ def _build_response_json_from_ws(
         data["alice_gain"] = payload["alice_gain"]
     if "bob_gain" in payload:
         data["bob_gain"] = payload["bob_gain"]
-    if "message" in payload and session.game_args.get("messages_allowed"):
-        data["message"] = payload["message"]
+    if session.game_args.get("messages_allowed"):
+        data["message"] = payload.get("message", "")
 
     return json.dumps(data)
 

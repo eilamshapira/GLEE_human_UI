@@ -46,6 +46,20 @@ function parseMessage(msg: ChatMessage): ParsedAction {
     }
   }
 
+  // Try GLEE's text format: "# Alice gain: 3500\n# Bob gain: 6500"
+  const aliceMatch = content.match(/#\s*Alice\s+gain:\s*([\d,]+)/i);
+  const bobMatch = content.match(/#\s*Bob\s+gain:\s*([\d,]+)/i);
+  if (aliceMatch && bobMatch) {
+    const msgMatch = content.match(/#\s*\w+'s message:\s*(.+)/);
+    return {
+      type: "proposal",
+      aliceGain: parseInt(aliceMatch[1].replace(/,/g, ""), 10),
+      bobGain: parseInt(bobMatch[1].replace(/,/g, ""), 10),
+      message: msgMatch ? msgMatch[1].trim() : undefined,
+      raw: content,
+    };
+  }
+
   if (msg.role === "system") {
     return { type: "system", raw: content };
   }
@@ -154,11 +168,39 @@ export default function ChatHistory({ messages, turnType, playerRole }: Props) {
 
 function content_summary(text: string): string {
   // Extract key info from GLEE's verbose prompts
-  if (text.includes("accepted")) return "Offer was accepted.";
-  if (text.includes("rejected")) return "Offer was rejected.";
+
+  // If message contains an offer (GLEE text format), don't summarize — parseMessage handles it
+  if (/#\s*Alice\s+gain:/i.test(text) && /#\s*Bob\s+gain:/i.test(text)) {
+    // This will be rendered as a ProposalCard by parseMessage, so return empty
+    // (this path shouldn't be reached since parseMessage catches it first)
+    return "";
+  }
+
+  if (text.includes("accepted") && !text.includes("gain"))
+    return "Offer was accepted.";
+  if (text.includes("rejected") && !text.includes("gain"))
+    return "Offer was rejected.";
   if (text.includes("Send your offer")) return "Your turn to make an offer.";
-  if (text.includes("accept or reject")) return "Decide: accept or reject?";
-  // Shorten long game rules
+  if (text.includes("accept or reject") || text.includes("Do you accept"))
+    return "Decide: accept or reject?";
+
+  // Detect round-start messages (e.g., "Round 3", "round 3 of 12")
+  const roundMatch = text.match(/[Rr]ound\s+(\d+)(?:\s+of\s+(\d+))?/);
+  if (roundMatch) {
+    const roundNum = roundMatch[1];
+    const totalRounds = roundMatch[2];
+    return totalRounds ? `Round ${roundNum} of ${totalRounds}` : `Round ${roundNum}`;
+  }
+
+  // Collapse GLEE's long game-rules prompts
+  if (
+    text.includes("Let's play a game") ||
+    text.includes("You are playing") ||
+    text.includes("The rules are")
+  )
+    return "Game rules";
+
+  // Shorten long game engine messages
   if (text.length > 100) return text.slice(0, 80) + "...";
   return text;
 }

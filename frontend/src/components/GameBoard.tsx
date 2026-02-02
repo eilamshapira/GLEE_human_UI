@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import type { GameState } from "../hooks/useGameState";
 import type { ToneModifier } from "../types";
 import { aiSuggest } from "../api";
@@ -31,6 +31,11 @@ export default function GameBoard({
 }: Props) {
   const [aiLoading, setAiLoading] = useState(false);
   const [validationError, setValidationError] = useState<string | null>(null);
+
+  // Clear stale validation errors when user adjusts inputs
+  useEffect(() => {
+    if (validationError) setValidationError(null);
+  }, [state.sliderPct, state.messageText]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const money = state.gameParams.money_to_divide ?? state.config?.money_to_divide ?? 10000;
   const delta1 = state.gameParams.delta_player_1 ?? state.gameParams.delta_1 ?? state.config?.delta_1 ?? 0.95;

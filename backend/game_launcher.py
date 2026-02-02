@@ -81,17 +81,22 @@ def launch_glee_subprocess(config: dict) -> subprocess.Popen:
     stdout_log = open(log_dir / "stdout.log", "w")
     stderr_log = open(log_dir / "stderr.log", "w")
 
-    proc = subprocess.Popen(
-        [
-            GLEE_PYTHON, "-u",
-            "main.py",
-            "-c", str(config_path.absolute()),
-            "-n", "1",
-        ],
-        cwd=str(GLEE_DIR),
-        stdout=stdout_log,
-        stderr=stderr_log,
-    )
+    try:
+        proc = subprocess.Popen(
+            [
+                GLEE_PYTHON, "-u",
+                "main.py",
+                "-c", str(config_path.absolute()),
+                "-n", "1",
+            ],
+            cwd=str(GLEE_DIR),
+            stdout=stdout_log,
+            stderr=stderr_log,
+        )
+    except Exception:
+        stdout_log.close()
+        stderr_log.close()
+        raise
     # Attach file handles so they can be closed later
     proc._stdout_log = stdout_log  # type: ignore
     proc._stderr_log = stderr_log  # type: ignore
