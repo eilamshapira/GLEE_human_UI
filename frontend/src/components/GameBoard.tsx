@@ -1,12 +1,13 @@
 import { useState, useCallback, useEffect } from "react";
 import type { GameState } from "../hooks/useGameState";
-import type { ToneModifier } from "../types";
+import type { EventTracker } from "../hooks/useEventTracker";
+import type { ToneModifier, ChatMessage } from "../types";
 import { aiSuggest } from "../api";
 import InflationBar from "./InflationBar";
 import ChatHistory from "./ChatHistory";
 import SplitSlider from "./SplitSlider";
 import MessagePanel from "./MessagePanel";
-import ToneChips from "./ToneChips";
+
 import ActionButtons from "./ActionButtons";
 import DecisionPanel from "./DecisionPanel";
 
@@ -16,8 +17,9 @@ interface Props {
   send: (type: string, payload: Record<string, unknown>) => void;
   setSliderPct: (pct: number) => void;
   setMessageText: (text: string) => void;
-  toggleTone: (mod: ToneModifier) => void;
+  appendMessage: (msg: ChatMessage) => void;
   clearForm: () => void;
+  tracker: EventTracker;
 }
 
 export default function GameBoard({
@@ -26,8 +28,9 @@ export default function GameBoard({
   send,
   setSliderPct,
   setMessageText,
-  toggleTone,
+  appendMessage,
   clearForm,
+  tracker,
 }: Props) {
   const [aiLoading, setAiLoading] = useState(false);
   const [validationError, setValidationError] = useState<string | null>(null);
@@ -42,15 +45,47 @@ export default function GameBoard({
   const delta2 = state.gameParams.delta_player_2 ?? state.gameParams.delta_2 ?? state.config?.delta_2 ?? 0.95;
   const messagesAllowed = state.gameParams.messages_allowed ?? state.config?.messages_allowed ?? true;
   const rivalName = state.playerRole === "alice" ? "Bob" : "Alice";
+  const aiEnabled = state.config?.assist_mode === "ai_assisted";
+  const pasteBlocked = state.config?.assist_mode === "no_copypaste";
+
+  const wrappedSetSliderPct = useCallback(
+    (pct: number) => {
+      setSliderPct(pct);
+      tracker.trackSlider(pct);
+    },
+    [setSliderPct, tracker],
+  );
+
+  const wrappedSetMessageText = useCallback(
+    (text: string) => {
+      setMessageText(text);
+      tracker.trackTyping(text);
+    },
+    [setMessageText, tracker],
+  );
+
+  const wrappedClearForm = useCallback(() => {
+    tracker.trackClick("clear");
+    clearForm();
+  }, [clearForm, tracker]);
+
+  const handlePasteAttempt = useCallback(
+    (blocked: boolean) => {
+      tracker.trackPaste(blocked);
+    },
+    [tracker],
+  );
 
   const handleAiSplit = useCallback(async () => {
     if (!state.sessionId) return;
+    if (state.config?.assist_mode !== "ai_assisted") return;
+    tracker.trackClick("ai_split");
     setAiLoading(true);
     try {
       const result = await aiSuggest(
         state.sessionId,
         "split",
-        state.toneModifiers,
+        [],
         state.messageText
       );
       if (result.suggested_split) {
@@ -58,33 +93,66 @@ export default function GameBoard({
           (result.suggested_split.alice / money) * 100
         );
         setSliderPct(Math.max(0, Math.min(100, alicePct)));
+        tracker.trackEvent("ai_suggest_result", { type: "split", ...result.suggested_split });
       }
     } catch (e) {
       console.error("AI split failed:", e);
     } finally {
       setAiLoading(false);
     }
-  }, [state.sessionId, state.toneModifiers, state.messageText, money, setSliderPct]);
+  }, [state.sessionId, state.messageText, money, setSliderPct, tracker]);
 
   const handleAiWrite = useCallback(async () => {
     if (!state.sessionId) return;
+    if (state.config?.assist_mode !== "ai_assisted") return;
+    tracker.trackClick("ai_write");
     setAiLoading(true);
     try {
+      const aliceGain = Math.round((state.sliderPct / 100) * money);
+      const bobGain = money - aliceGain;
       const result = await aiSuggest(
         state.sessionId,
         "message",
-        state.toneModifiers,
-        state.messageText
+        [],
+        state.messageText,
+        { alice: aliceGain, bob: bobGain }
       );
       if (result.suggested_message) {
         setMessageText(result.suggested_message);
+        tracker.trackEvent("ai_suggest_result", { type: "message", length: result.suggested_message.length });
       }
     } catch (e) {
       console.error("AI write failed:", e);
     } finally {
       setAiLoading(false);
     }
-  }, [state.sessionId, state.toneModifiers, state.messageText, setMessageText]);
+  }, [state.sessionId, state.messageText, state.sliderPct, money, setMessageText, tracker]);
+
+  const handleToneRewrite = useCallback(async (mod: ToneModifier) => {
+    if (!state.sessionId) return;
+    if (state.config?.assist_mode !== "ai_assisted") return;
+    tracker.trackClick("tone_chip", { modifier: mod });
+    setAiLoading(true);
+    try {
+      const aliceGain = Math.round((state.sliderPct / 100) * money);
+      const bobGain = money - aliceGain;
+      const result = await aiSuggest(
+        state.sessionId,
+        "tone_rewrite",
+        [mod],
+        state.messageText,
+        { alice: aliceGain, bob: bobGain }
+      );
+      if (result.suggested_message) {
+        setMessageText(result.suggested_message);
+        tracker.trackEvent("ai_suggest_result", { type: "message", modifier: mod, length: result.suggested_message.length });
+      }
+    } catch (e) {
+      console.error("AI tone rewrite failed:", e);
+    } finally {
+      setAiLoading(false);
+    }
+  }, [state.sessionId, state.messageText, state.sliderPct, money, setMessageText, tracker]);
 
   const handleSend = useCallback(() => {
     const aliceGain = Math.round((state.sliderPct / 100) * money);
@@ -101,6 +169,7 @@ export default function GameBoard({
     }
 
     setValidationError(null);
+    tracker.trackClick("send", { alice_gain: aliceGain, bob_gain: bobGain, message_length: state.messageText.length });
 
     const payload: Record<string, unknown> = {
       alice_gain: aliceGain,
@@ -110,15 +179,29 @@ export default function GameBoard({
       payload.message = state.messageText.trim();
     }
 
+    // Optimistic UI: show the proposal in chat immediately
+    appendMessage({
+      role: "assistant",
+      content: JSON.stringify(payload),
+    });
+
     send("submit_response", payload);
     clearForm();
-  }, [state.sliderPct, state.messageText, money, messagesAllowed, send, clearForm]);
+  }, [state.sliderPct, state.messageText, money, messagesAllowed, send, appendMessage, clearForm, tracker]);
 
   const handleDecision = useCallback(
     (decision: "accept" | "reject") => {
+      tracker.trackClick(decision);
+
+      // Optimistic UI: show the decision in chat immediately
+      appendMessage({
+        role: "assistant",
+        content: JSON.stringify({ decision }),
+      });
+
       send("submit_response", { decision });
     },
-    [send]
+    [send, appendMessage, tracker]
   );
 
   const isMyTurn =
@@ -158,29 +241,29 @@ export default function GameBoard({
             <>
               <SplitSlider
                 pct={state.sliderPct}
-                onChange={setSliderPct}
+                onChange={wrappedSetSliderPct}
                 moneyToDiv={money}
                 playerRole={state.playerRole}
                 onAiSplit={handleAiSplit}
                 loading={aiLoading}
+                aiEnabled={aiEnabled}
               />
 
               <MessagePanel
                 text={state.messageText}
-                onChange={setMessageText}
+                onChange={wrappedSetMessageText}
                 onAiWrite={handleAiWrite}
+                onToneRewrite={handleToneRewrite}
                 loading={aiLoading}
                 disabled={!messagesAllowed}
                 rivalName={rivalName}
-              />
-
-              <ToneChips
-                active={state.toneModifiers}
-                onToggle={toggleTone}
+                aiEnabled={aiEnabled}
+                pasteBlocked={pasteBlocked}
+                onPasteAttempt={handlePasteAttempt}
               />
 
               <ActionButtons
-                onClear={clearForm}
+                onClear={wrappedClearForm}
                 onSend={handleSend}
                 disabled={!isMyTurn || !connected}
                 validationError={validationError}
@@ -192,6 +275,7 @@ export default function GameBoard({
             <DecisionPanel
               lastOffer={state.lastOffer}
               moneyToDiv={money}
+              playerRole={state.playerRole}
               onDecide={handleDecision}
             />
           )}

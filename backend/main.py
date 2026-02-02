@@ -30,6 +30,7 @@ from glee_bridge import bridge
 from ws_manager import ws_manager
 from game_manager import game_manager
 from ai_assistant import suggest
+from interaction_logger import interaction_logger
 
 app = FastAPI(title="GLEE Human UI")
 
@@ -62,6 +63,7 @@ async def create_game(req: CreateGameRequest):
         "game_family": session.game_family,
         "player_role": session.player_role,
         "status": session.status,
+        "assist_mode": session.assist_mode,
     }
 
 
@@ -226,6 +228,9 @@ async def ai_suggest(session_id: str, req: AISuggestRequest):
     if session is None:
         raise HTTPException(404, "Game not found")
 
+    if session.assist_mode != "ai_assisted":
+        raise HTTPException(403, "AI suggestions disabled in this mode")
+
     pending = bridge.get_pending(session_id)
     messages = pending.messages if pending else []
     game_params = pending.game_params if pending else session.game_args
@@ -267,6 +272,12 @@ async def websocket_endpoint(ws: WebSocket, session_id: str):
                             "player_role": session.player_role,
                             "last_offer": None,
                         }))
+
+            elif msg.get("type") == "track_event":
+                try:
+                    interaction_logger.log(session_id, msg.get("payload", msg))
+                except Exception:
+                    pass  # never break the game for tracking
 
     except WebSocketDisconnect:
         ws_manager.disconnect(session_id, ws)

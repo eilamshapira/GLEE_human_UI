@@ -20,6 +20,7 @@ from game_launcher import build_glee_config, launch_glee_subprocess
 from glee_bridge import bridge
 from ws_manager import ws_manager
 from models import CreateGameRequest
+from interaction_logger import interaction_logger
 
 
 @dataclass
@@ -31,6 +32,7 @@ class GameSession:
     game_args: dict[str, Any]
     delta_1: float
     delta_2: float
+    assist_mode: str = "ai_assisted"
     status: str = "active"  # active, finished, error
     created_at: str = ""
     process: Optional[subprocess.Popen] = field(default=None, repr=False)
@@ -61,6 +63,7 @@ class GameManager:
             game_args=game_args,
             delta_1=req.delta_1,
             delta_2=req.delta_2,
+            assist_mode=req.assist_mode.value,
             created_at=datetime.utcnow().isoformat(),
         )
         self._sessions[session_id] = session
@@ -133,6 +136,9 @@ class GameManager:
         # Clean up pending bridge turn
         bridge.clear(session.session_id)
 
+        # Close interaction log for this session
+        interaction_logger.close(session.session_id)
+
         # Notify frontend
         await ws_manager.send_json(session.session_id, {
             "type": "game_finished",
@@ -183,6 +189,7 @@ class GameManager:
                 "game_family": s.game_family,
                 "player_role": s.player_role,
                 "status": s.status,
+                "assist_mode": s.assist_mode,
                 "created_at": s.created_at,
             }
             for s in self._sessions.values()

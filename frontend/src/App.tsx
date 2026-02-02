@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useWebSocket } from "./hooks/useWebSocket";
 import { useGameState } from "./hooks/useGameState";
+import { useEventTracker } from "./hooks/useEventTracker";
 import { createGame } from "./api";
 import GameSetup from "./components/GameSetup";
 import GameBoard from "./components/GameBoard";
@@ -13,6 +14,7 @@ export default function App() {
 
   const { lastMessage, connected, send } = useWebSocket(sessionId);
   const gameState = useGameState(lastMessage);
+  const tracker = useEventTracker({ send, roundNumber: gameState.state.roundNumber });
 
   const handleStart = async (config: GameConfig) => {
     setIsCreating(true);
@@ -21,6 +23,7 @@ export default function App() {
       setSessionId(result.session_id);
       gameState.setSessionId(result.session_id);
       gameState.setConfig(config);
+      tracker.trackEvent("game_started", { session_id: result.session_id, config: config as unknown as Record<string, unknown> });
     } finally {
       setIsCreating(false);
     }
@@ -65,8 +68,9 @@ export default function App() {
         send={send}
         setSliderPct={gameState.setSliderPct}
         setMessageText={gameState.setMessageText}
-        toggleTone={gameState.toggleTone}
+        appendMessage={gameState.appendMessage}
         clearForm={gameState.clearForm}
+        tracker={tracker}
       />
     </div>
   );
